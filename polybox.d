@@ -11,9 +11,8 @@ static immutable EPS = real.epsilon;
 
 struct point
 {
+public:
     real x, y;
-    // for l-values and r-values,
-    // with converting both hand side implicitly to const
     bool opEquals()(auto const ref point other) const
     {
         return fabs(x - other.x) < EPS && (fabs(y - other.y) < EPS);
@@ -57,6 +56,16 @@ struct point
         else
             static assert(0, "Operator " ~ op ~ " not implemented");
     }
+
+    void toString(void delegate(const(char)[]) sink) const
+    {
+        sink.formattedWrite!"(%s, %s)"(x, y);
+    }
+
+    //string toString() const 
+    //{
+    //    return format("(%s,%s)", x, y);
+    //}
 }
 
 pure real dist(const point p, const point q)
@@ -92,16 +101,18 @@ unittest
     auto q = point(0, 1);
     auto r = point(-1, 0);
     assert(ccw(p, q, r));
+    assert(!ccw(r,q,p));
 }
 
 struct polygon
 {
+private:
     point[] vxs;
 
+public:
     this(point[] points)
     {
-        // TODO: Check for clockwise ordering, if not, order points
-        vxs = points.dup;
+        vxs = points;
         this.sort();
     }
 
@@ -165,6 +176,21 @@ struct polygon
         return vxs.length;
     }
 
+    void toString(void delegate(const(char)[]) sink) const
+    {
+        sink.formattedWrite!("[\n");
+        foreach(v; vxs)
+        {
+            sink.formattedWrite!("\t%s\n")(v);
+        }
+        sink.formattedWrite!("]");
+    }
+
+    //string toString() const
+    //{
+    //    return format("[\n%s\n]", join(vxs.map!(p => "\t" ~ p.toString()), "\n"));
+    //}
+
     void sort()
     {
         real x = 0;
@@ -216,8 +242,10 @@ unittest
     polygon P = polygon([
             point(1, 1), point(-1, -1), point(1, -1), point(-1, 1)
             ]);
-    P.sort();
-    assert(P.vxs == [point(1, 1), point(1, -1), point(-1, -1), point(-1, 1)]);
+    polygon Q = polygon([
+            point(1, -1), point(-1, 1), point(1, 1), point(-1, -1)
+            ]);
+    assert(P == Q);
 }
 
 bool is_convex(polygon P)
@@ -275,26 +303,32 @@ polygon convex_hull(const point[] points)
     sort(_points);
     auto compute_hull = (bool is_upper) {
         auto hull = [_points[0], _points[1]];
+        if (!is_upper)
+        {
+            hull[0].y = -hull[0].y;
+            hull[1].y = -hull[1].y;
+        }
         foreach (p; _points[2 .. $])
         {
+            p.y = is_upper ? p.y : -p.y;
             while (hull.length >= 2 && !ccw(p, hull[$ - 1], hull[$ - 2]))
             {
                 hull.popBack();
             }
             hull ~= p;
         }
+        if (!is_upper)
+        {
+            hull.each!((ref p) => p.y = -p.y);
+        }
         return hull;
     };
-    auto upper_hull = compute_hull(true);
-    _points.each!((ref p) => p.y = -p.y);
-    auto lower_hull = compute_hull(true);
-    lower_hull.each!((ref p) => p.y = -p.y);
-    return polygon(upper_hull ~ lower_hull[1 .. $ - 1].reverse ~ upper_hull[0]);
+    return polygon(compute_hull(true) ~ compute_hull(false)[1 .. $ - 1]);
 }
 
 unittest
 {
-    if (exists("testdata/convex_hull.in"))
+    if (exists("testdata/convex_hull.in") && exists("testdata/convex_hull.out"))
     {
         File file = File("testdata/convex_hull.in", "r");
         point[] space;
@@ -308,9 +342,22 @@ unittest
                 space ~= p;
             }
         }
-        // TODO: Put answer into a polygon
-        // TODO: Compute our answer on space
-        // TODO: Assert they are equal
+        file.close();
+        file = File("testdata/convex_hull.out", "r");
+        point[] ans_points;
+        while (!file.eof())
+        {
+            point p;
+            string line = strip(file.readln());
+            uint nitems = formattedRead(line, " %s %s", &p.x, &p.y);
+            if (nitems == 2)
+            {
+                ans_points ~= p;
+            }
+        }
+        polygon A = polygon(ans_points);
+        polygon P = convex_hull(space);
+        assert(P == A);
     }
 }
 
