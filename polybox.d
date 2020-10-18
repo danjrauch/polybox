@@ -1,3 +1,8 @@
+/**
+ * Authors: Dan Rauch, drauch@hawk.iit.edu
+ * Version: 0.1.0
+ */
+
 import std.stdio;
 import std.algorithm;
 import std.math;
@@ -9,6 +14,11 @@ import std.datetime.stopwatch : benchmark, StopWatch, AutoStart;
 
 static immutable EPS = real.epsilon;
 
+/**
+  Structure representing a point in 2D space.
+  History:
+    v0.1.0 introduced
+ */
 struct point
 {
 public:
@@ -61,13 +71,24 @@ public:
     {
         sink.formattedWrite!"(%s, %s)"(x, y);
     }
-
-    //string toString() const 
-    //{
-    //    return format("(%s,%s)", x, y);
-    //}
 }
 
+/**
+  Calculates the distance between two points.
+
+  Example:
+  -------------------
+  point p = point(0, 0);
+  point q = point(1, 1);
+  real distance = dist(p, q);
+  -------------------
+  History:
+    v0.1.0 introduced
+  Params:
+    p = the first point
+    q = the second point
+  Returns: the distance between the points.
+ */
 pure real dist(const point p, const point q)
 {
     return hypot(p.x - q.x, p.y - q.y);
@@ -80,16 +101,49 @@ unittest
     assert(dist(p, q) == sqrt(2.0));
 }
 
+/**
+  Calculates the cross product of three points.
+
+  History:
+    v0.1.0 introduced
+  Params:
+    p = the first point
+    q = the second point
+    r = the third point
+  Returns: the cross product of the three points.
+ */
 pure real cross(const point p, const point q, const point r)
 {
     return (q.x - p.x) * (r.y - p.y) - (r.x - p.x) * (q.y - p.y);
 }
 
+/**
+  Determines if the path from p to r through q is a left turn.
+
+  History:
+    v0.1.0 introduced
+  Params:
+    p = the beginning point
+    q = the in-between point
+    r = the end point
+  Returns: true if left turn, false otherwise.
+ */
 pure bool ccw(const point p, const point q, const point r)
 {
     return cross(p, q, r) > 0;
 }
 
+/**
+  Determines if p, q, and r can lie on the same line.
+
+  History:
+    v0.1.0 introduced
+  Params:
+    p = the first point
+    q = the second point
+    r = the third point
+  Returns: true if the points are colinear, false otherwise.
+ */
 pure bool colinear(const point p, const point q, const point r)
 {
     return fabs(cross(p, q, r)) < EPS;
@@ -104,17 +158,67 @@ unittest
     assert(!ccw(r,q,p));
 }
 
+/**
+  Structure representing a 2D polygon. 
+  History:
+    v0.1.0 introduced
+  */
 struct polygon
 {
 private:
     point[] vxs;
 
+    point[] ccwise_sort(point[] points)
+    {
+        real x = 0;
+        real y = 0;
+        foreach (p; points)
+        {
+            x += p.x;
+            y += p.y;
+        }
+        point center = point(x / points.length, y / points.length);
+        auto less = (point p, point q) {
+            if (p.x - center.x >= 0 && q.x - center.x < 0)
+            {
+                return true;
+            }
+            if (p.x - center.x < 0 && q.x - center.x >= 0)
+            {
+                return false;
+            }
+            if (p.x - center.x == 0 && q.x - center.x == 0)
+            {
+                if (p.y - center.y >= 0 || q.y - center.y >= 0)
+                {
+                    return p.y > q.y;
+                }
+                return q.y > p.y;
+            }
+            auto det = cross(center, p, q);
+            if (det < 0)
+            {
+                return true;
+            }
+            if (det > 0)
+            {
+                return false;
+            }
+            real d1 = (p.x - center.x) * (p.x - center.x) + 
+                (p.y - center.y) * (p.y - center.y);
+            real d2 = (q.x - center.x) * (q.x - center.x) + 
+                (q.y - center.y) * (q.y - center.y);
+            return d1 > d2;
+        };
+        std.algorithm.sort!(less)(points);
+        return points;
+    }
+
 public:
     this(point[] points)
     {
-        vxs = points;
-        this.sort();
-    }
+        vxs = this.ccwise_sort(points);
+    } 
 
     bool opEquals()(auto const ref polygon other) const
     {
@@ -186,54 +290,24 @@ public:
         sink.formattedWrite!("]");
     }
 
-    //string toString() const
-    //{
-    //    return format("[\n%s\n]", join(vxs.map!(p => "\t" ~ p.toString()), "\n"));
-    //}
+    /**
+      Sorts the points of the polygon in counter-clockwise order.
 
+      The points of the polygon are sorted initially during construction. 
+
+      Example:
+      -------------------
+      polygon P = polygon();
+      P ~= point(0,0);
+      // add more points to P
+      P.sort();
+      -------------------
+      History:
+        v0.1.0 introduced
+    */
     void sort()
     {
-        real x = 0;
-        real y = 0;
-        foreach (p; vxs)
-        {
-            x += p.x;
-            y += p.y;
-        }
-        point center = point(x / this.length, y / this.length);
-        auto less = (point p, point q) {
-            if (p.x - center.x >= 0 && q.x - center.x < 0)
-            {
-                return true;
-            }
-            if (p.x - center.x < 0 && q.x - center.x >= 0)
-            {
-                return false;
-            }
-            if (p.x - center.x == 0 && q.x - center.x == 0)
-            {
-                if (p.y - center.y >= 0 || q.y - center.y >= 0)
-                {
-                    return p.y > q.y;
-                }
-                return q.y > p.y;
-            }
-            auto det = cross(center, p, q);
-            if (det < 0)
-            {
-                return true;
-            }
-            if (det > 0)
-            {
-                return false;
-            }
-            real d1 = (p.x - center.x) * (p.x - center.x) + 
-                (p.y - center.y) * (p.y - center.y);
-            real d2 = (q.x - center.x) * (q.x - center.x) + 
-                (q.y - center.y) * (q.y - center.y);
-            return d1 > d2;
-        };
-        std.algorithm.sort!(less)(vxs);
+        this.ccwise_sort(vxs);
     }
 }
 
@@ -248,6 +322,24 @@ unittest
     assert(P == Q);
 }
 
+/**
+  Determines if a polygon is convex.
+
+  Example:
+  -------------------
+  point p = point(0, 0);
+  point q = point(1, 1);
+  point r = point(0, 1);
+  point s = point(1, 0);
+  polygon P = polygon([p, q, r, s]);
+  bool cvex = is_convex(P);
+  -------------------
+  History:
+    v0.1.0 introduced
+  Params:
+    P = the polygon to test for convexity
+  Returns: true if P is convex, false otherwise.
+ */
 bool is_convex(polygon P)
 {
     if (P.length <= 2)
@@ -277,7 +369,7 @@ unittest
     if (exists("testdata/convex_hull.out"))
     {
         File file = File("testdata/convex_hull.out", "r");
-        polygon P;
+        point[] points;
         while (!file.eof())
         {
             point p;
@@ -285,14 +377,31 @@ unittest
             uint nitems = formattedRead(line, " %s %s", &p.x, &p.y);
             if (nitems == 2)
             {
-                P ~= p;
+                points ~= p;
             }
         }
-        P.sort();
+        polygon P = polygon(points);
         assert(is_convex(P));
     }
 }
 
+/**
+  Constructs the convex hull of a list of points.
+
+  Example:
+  -------------------
+  point p = point(0, 0);
+  point q = point(1, 1);
+  point r = point(0, 1);
+  point s = point(1, 0);
+  polygon c_hull = convex_hull([p, q, r, s]);
+  -------------------
+  History:
+    v0.1.0 introduced
+  Params:
+    points = the list of points to construct convex hull for
+  Returns: polygon with convex hull around points.
+ */
 polygon convex_hull(const point[] points)
 {
     auto _points = points.dup;
@@ -375,4 +484,4 @@ void main()
     writeln("Runtime: ", sw.peek.total!"nsecs", " ns");
 }
 
-// dub run dfmt -- --inplace --max_line_length=80 geometry.d
+// dub run dfmt -- --inplace --max_line_length=80 polybox.d
